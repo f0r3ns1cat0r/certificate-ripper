@@ -39,11 +39,8 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
@@ -59,55 +56,42 @@ public class CertificateRipperClient {
     private static final String SYSTEM = "system";
 
     private final ClientConfig clientConfig;
+    private final CertificateExtractingClient client;
 
     public CertificateRipperClient(ClientConfig clientConfig) {
         this.clientConfig = clientConfig;
+        this.client = createClient().build();
     }
 
     public CertificateHolder getCertificateHolder() {
         List<String> resolvedUrls = getUniqueUrls(clientConfig.getUrls());
-        Map<String, List<X509Certificate>> urlsToCertificates = getCertificates(resolvedUrls);
+        pingUrls(resolvedUrls);
 
-        addSiblingsIfNeeded(urlsToCertificates);
-        urlsToCertificates = filterCertificatesIfNeeded(urlsToCertificates, clientConfig.getCertificateType());
+        pingSiblings(client.getCertificatesCollector());
+        Map<String, List<X509Certificate>> urlsToCertificates = filterCertificatesIfNeeded(client.getCertificatesCollector(), clientConfig.getCertificateType());
         addSystemCertificatesIfNeeded(urlsToCertificates);
 
         return new CertificateHolder(urlsToCertificates);
     }
 
-    private Map<String, List<X509Certificate>> getCertificates(List<String> urls) {
-        return urls.stream().distinct().parallel()
-                .map(this::getCertificates)
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .collect(Collectors.collectingAndThen(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (key1, key2) -> key1, LinkedHashMap::new), HashMap::new));
-    }
+    private void pingUrls(List<String> urls) {
+        urls.stream().parallel().forEach(url -> {
+            var clientRunnable = switch (URI.create(url).getScheme()) {
+                case "wss" -> WebSocketClientRunnable.getInstance();
+                case "ftps" -> FtpsClientRunnable.getInstance();
+                case "smtps" -> SmtpClientRunnable.getInstance();
+                case "imaps" -> ImapClientRunnable.getInstance();
+                case "postgresql" -> PostgresClientRunnable.getInstance();
+                case "mysql" -> MySQLClientRunnable.getInstance();
+                default -> null;
+            };
 
-    private Optional<Map.Entry<String, List<X509Certificate>>> getCertificates(String url) {
-        try {
-            CertificateExtractingClient client = createClient(url).build();
-            List<X509Certificate> certificates = client.get(url);
-            return Optional.of(Map.entry(url, certificates));
-        } catch (Exception e) {
-            LOGGER.debug(String.format("Could not extract from %s", url), e);
-            return Optional.empty();
-        }
-    }
-
-    private CertificateExtractingClient.Builder createClient(String url) {
-        CertificateExtractingClient.Builder clientBuilder = createClient();
-        URI uri = URI.create(url);
-        switch (uri.getScheme()) {
-            case "wss" -> clientBuilder.withClientRunnable(new WebSocketClientRunnable());
-            case "ftps" -> clientBuilder.withClientRunnable(new FtpsClientRunnable());
-            case "smtps" -> clientBuilder.withClientRunnable(new SmtpClientRunnable());
-            case "imaps" -> clientBuilder.withClientRunnable(new ImapClientRunnable());
-            case "postgresql" -> clientBuilder.withClientRunnable(new PostgresClientRunnable());
-            case "mysql" -> clientBuilder.withClientRunnable(new MySQLClientRunnable());
-            default -> {}
-        }
-
-        return clientBuilder;
+            try {
+                client.call(url, clientRunnable);
+            } catch (Exception e) {
+                LOGGER.debug(String.format("Could not extract from %s", url), e);
+            }
+        });
     }
 
     private CertificateExtractingClient.Builder createClient() {
@@ -156,7 +140,7 @@ public class CertificateRipperClient {
         return uniqueUrls;
     }
 
-    private void addSiblingsIfNeeded(Map<String, List<X509Certificate>> urlsToCertificates) {
+    private void pingSiblings(Map<String, List<X509Certificate>> urlsToCertificates) {
         if (!clientConfig.getResolveSiblings()) {
             return;
         }
@@ -167,24 +151,20 @@ public class CertificateRipperClient {
                 .setStyle(ProgressBarStyle.COLORFUL_UNICODE_BAR)
                 .setTaskName("Resolving sibling certificates").showSpeed();
 
-        List<String> urls = urlsToCertificates.values().stream().parallel()
-                .flatMap(certificates -> UriUtils.getDnsNames(certificates).stream())
+        List<String> urls = urlsToCertificates.values().stream()
+                .flatMap(certificates -> UriUtils.extractHostsFromSAN(certificates).stream())
                 .distinct()
                 .toList();
 
-        CertificateExtractingClient client = createClient().build();
-        Map<String, List<X509Certificate>> siblings = ProgressBar.wrap(urls.stream(), pbb)
-                .map(url -> {
+        ProgressBar.wrap(urls.stream(), pbb)
+                .parallel()
+                .forEach(url -> {
                     try {
-                        return Map.entry(url, client.get(url));
+                        client.call(url);
                     } catch (Exception e) {
-                        return null;
+                        LOGGER.debug(String.format("Could not extract sibling certificate from %s", url), e);
                     }
-                })
-                .filter(Objects::nonNull)
-                .collect(Collectors.collectingAndThen(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (key1, key2) -> key1, LinkedHashMap::new), HashMap::new));
-
-        urlsToCertificates.putAll(siblings);
+                });
     }
 
     private void addSystemCertificatesIfNeeded(Map<String, List<X509Certificate>> urlsToCertificates) {
