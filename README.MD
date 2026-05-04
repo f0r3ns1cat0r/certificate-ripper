@@ -10,14 +10,6 @@
 # Certificate Ripper 🔐
 A CLI tool to extract server certificates
 
-# Introduction
-Certificate ripper came to life when I was curious to learn about writing OS native apps. It started as a pet project and I wanted to create a native app by writing it in Java.
-During my work I discovered that extracting certificates in other tools can sometimes be troublesome, so I used that as a use-case to create an app in Java, compile that to native OS app so others don't need Java to run it.
-It made my work easier for maintaining trust-stores and I hope it made others life also easier.
-
-I have created this tool with ❤️ and passion, mostly during evening and night hours. If you use my tool and want to appreciate the work I have done, please consider to sponsor this project as a way to contribute back to the community.
-There are 3 options available to pick from: [GitHub](https://github.com/sponsors/Hakky54), [Ko-fi](https://ko-fi.com/hakky54) and [Open Collective](https://opencollective.com/hakky54)
-
 ## Demo
 ![alt text](https://github.com/Hakky54/certificate-ripper/blob/master/images/demo.gif?raw=true)
 
@@ -270,11 +262,11 @@ CertificateRipper.exportToPem("https://github.com")
         .run();
 ```
 
-## Contributing
+## Support
+Certificate Ripper needs your help!
 
-There are plenty of ways to contribute to this project:
+If you can, please consider sponsoring Certificate Ripper. Even a small donation would help us offset the recurring maintenance costs. With enough sponsors we would be able to make Certificate Ripper grow faster and stronger! You can sponsor it at [GitHub](https://github.com/sponsors/Hakky54), [Ko-fi](https://ko-fi.com/hakky54) or [open collective](https://opencollective.com/hakky54).
 
-* Give it a star
-* Make a donation through [GitHub](https://github.com/sponsors/Hakky54) or [open collective](https://opencollective.com/hakky54)
-* Share it with a [![Tweet](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/intent/tweet?text=Easily%20extract%20server%20certificates&url=https://github.com/Hakky54/certificate-ripper&via=hakky541&hashtags=certificate,security,https,ssl,tls,developer,java)
-* Submit a PR
+If you are an industry user of Certificate Ripper and want to make sure it can keep growing and being maintained, please reach out!
+
+In any case, please star it on GitHub and share the word about it!
